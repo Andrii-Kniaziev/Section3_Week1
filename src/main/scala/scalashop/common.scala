@@ -33,19 +33,35 @@ def clamp(v: Int, min: Int, max: Int): Int =
 /** Image is a two-dimensional matrix of pixel values. */
 class Img(val width: Int, val height: Int, private val data: Array[RGBA]):
   def this(w: Int, h: Int) = this(w, h, new Array(w * h))
+
   def apply(x: Int, y: Int): RGBA = data(y * width + x)
+
   def update(x: Int, y: Int, c: RGBA): Unit = data(y * width + x) = c
 
 /** Computes the blurred RGBA value of a single pixel of the input image. */
-def boxBlurKernel(src: Img, x: Int, y: Int, radius: Int): RGBA =
+def boxBlurKernel(src: Img, x: Int, y: Int, radius: Int): RGBA = {
+  val fromX = x - radius
+  val toX = x + radius
+  val fromY = y - radius
+  val toY = y + radius
 
-  // TODO implement using while loops
-  ???
+  val pixels = for {
+    ix <- clamp(fromX, 0, src.width - 1) to clamp(toX, x, src.width - 1)
+    iy <- clamp(fromY, 0, src.height - 1) to clamp(toY, y, src.height - 1)
+  } yield src(ix, iy)
+
+  val res = pixels.map(c => (red(c), green(c), blue(c), alpha(c)))
+    .reduceLeft((f, s) => (f._1 + s._1, f._2 + s._2, f._3 + s._3, f._4 + s._4))
+  val q = pixels.size
+
+  rgba(res._1 / q, res._2 / q, res._3 / q, res._4 / q)
+}
 
 val forkJoinPool = ForkJoinPool()
 
 abstract class TaskScheduler:
   def schedule[T](body: => T): ForkJoinTask[T]
+
   def parallel[A, B](taskA: => A, taskB: => B): (A, B) =
     val right = task {
       taskB
@@ -53,7 +69,7 @@ abstract class TaskScheduler:
     val left = taskA
     (left, right.join())
 
-class DefaultTaskScheduler extends TaskScheduler:
+class DefaultTaskScheduler extends TaskScheduler :
   def schedule[T](body: => T): ForkJoinTask[T] =
     val t = new RecursiveTask[T] {
       def compute = body
@@ -75,8 +91,15 @@ def parallel[A, B](taskA: => A, taskB: => B): (A, B) =
   scheduler.value.parallel(taskA, taskB)
 
 def parallel[A, B, C, D](taskA: => A, taskB: => B, taskC: => C, taskD: => D): (A, B, C, D) =
-  val ta = task { taskA }
-  val tb = task { taskB }
-  val tc = task { taskC }
+  val ta = task {
+    taskA
+  }
+  val tb = task {
+    taskB
+  }
+  val tc = task {
+    taskC
+  }
   val td = taskD
   (ta.join(), tb.join(), tc.join(), td)
+
