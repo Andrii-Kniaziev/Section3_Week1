@@ -39,9 +39,12 @@ object VerticalBoxBlur extends VerticalBoxBlurInterface:
    *  Within each column, `blur` traverses the pixels by going from top to
    *  bottom.
    */
-  def blur(src: Img, dst: Img, from: Int, end: Int, radius: Int): Unit =
-    // TODO implement this method using the `boxBlurKernel` method
-    ???
+  def blur(src: Img, dst: Img, from: Int, end: Int, radius: Int): Unit = {
+    for {
+      x <- from until end
+      y <- 0 until src.height
+    } dst.update(x, y, boxBlurKernel(src, x, y, radius))
+  }
 
   /** Blurs the columns of the source image in parallel using `numTasks` tasks.
    *
@@ -49,7 +52,18 @@ object VerticalBoxBlur extends VerticalBoxBlurInterface:
    *  `numTasks` separate strips, where each strip is composed of some number of
    *  columns.
    */
-  def parBlur(src: Img, dst: Img, numTasks: Int, radius: Int): Unit =
-    // TODO implement using the `task` construct and the `blur` method
-    ???
+  def parBlur(src: Img, dst: Img, numTasks: Int, radius: Int): Unit = {
+    val width = src.width
+    val part = Math.max(width / numTasks,1)
+    val range = Range(0, width + 1, part).toList
+
+    val stripes = {
+      if (range.last != width) range.updated(range.size - 1, width)
+      else range
+    }
+
+    (for {
+      p <- stripes.zip(stripes.tail)
+    } yield task { blur(src, dst, p._1, p._2, radius) }).foreach(_.join())
+  }
 
